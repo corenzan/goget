@@ -33,12 +33,15 @@ const anything = httpbin.extend({
 });
 
 const resp = await anything.post("test", {
+  params: {
+    one: 1,
+  },
   data: {
     message: "Hello!",
   },
 });
 
-//=> curl -X POST https://httpbin.org/anything/test -H 'content-type: application/json' -H 'x-api-key: 123' -d '{"message":"Hello!"}'
+//=> curl -X POST 'https://httpbin.org/anything/test?one=1' -H 'content-type: application/json' -H 'x-api-key: 123' -d '{"message":"Hello!"}'
 ```
 
 ### URL parametrization
