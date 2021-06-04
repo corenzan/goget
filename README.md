@@ -16,14 +16,29 @@
 
 ```typescript
 const httpbin = goget.extend({
-  url: "https://httpbin.org",
+  url: "{schema}://httpbin.org",
+  reqHooks: [
+    async (req) => {
+      req.headers["x-api-key"] = "123";
+      return req;
+    }
+  ],
 });
 
-const resp = await httpbin.post("/anything", {
-  data: { message: "Hello, httpbin!" },
+const anything = httpbin.extend({
+  url: "/anything",
+  params: {
+    schema: "https",
+  },
 });
 
-console.log(resp.data);
+const resp = await anything.post("test", {
+  data: {
+    message: "Hello!",
+  },
+});
+
+console.log(resp); //=> curl -X POST https://httpbin.org/anything/test -H 'x-api-key: 123' -d '{"message":"Hello!"}'
 ```
 
 ### URL parametrization
