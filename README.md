@@ -38,7 +38,7 @@ const resp = await anything.post("test", {
   },
 });
 
-console.log(resp); //=> curl -X POST https://httpbin.org/anything/test -H 'x-api-key: 123' -d '{"message":"Hello!"}'
+//=> curl -X POST https://httpbin.org/anything/test -H 'content-type: application/json' -H 'x-api-key: 123' -d '{"message":"Hello!"}'
 ```
 
 ### URL parametrization
