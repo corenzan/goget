@@ -5,6 +5,12 @@ enableFetchMocks();
 import { default as goget } from ".";
 
 describe("goget", () => {
+  (global.location as any) = {
+    toString() {
+      return "http://localhost";
+    },
+  };
+
   beforeEach(() => {
     fetch.resetMocks();
   });

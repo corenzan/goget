@@ -16,7 +16,7 @@
 
 ```typescript
 const httpbin = goget.extend({
-  url: "{schema}://httpbin.{tld}",
+  url: "http://httpbin.{tld}",
   params: {
     tld: "org",
   },
@@ -24,7 +24,7 @@ const httpbin = goget.extend({
     async (req) => {
       req.headers["x-api-key"] = "123";
       return req;
-    }
+    },
   ],
 });
 

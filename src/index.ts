@@ -127,7 +127,9 @@ const createRequest = async (req: Req) => {
   const { headers, data, method } = req;
   const init = {
     method: method.toUpperCase(),
-    headers: {},
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+    },
     body: data ? JSON.stringify(data) : undefined,
   };
   const url = createUrl(req);
@@ -141,31 +143,50 @@ const createRequest = async (req: Req) => {
  * @returns Response descriptor.
  */
 const createResp = async <T>(response: Response, req: Req) => {
-  const { headers, url, status, json } = response;
+  const { headers, url, status } = response;
 
   return {
     url,
     req,
     status,
-    data: await json.bind(response)(),
+    data: await response.json(),
     headers: Object.fromEntries(headers),
   } as Resp<T>;
 };
 
 /**
+ * Merge two given URLs using our heuristic.
+ * @param baseUrl Base URL.
+ * @param url Merging URL.
+ * @returns Merged URL.
+ */
+const mergeUrl = (url: string, baseUrl: string) => {
+  if (!baseUrl.startsWith("http")) {
+    baseUrl = mergeUrl(baseUrl, location.toString());
+  }
+  if (url !== "" && !url.startsWith("/") && !baseUrl.endsWith("/")) {
+    baseUrl += "/";
+  }
+  return baseUrl + url;
+};
+
+/**
  * Merge two request descriptors following a heurestic.
- * @param a Request descriptor A.
- * @param b Request descriptor B.
+ * @param baseReq Request descriptor A.
+ * @param req Request descriptor B.
  * @returns Merged request descriptor.
  */
-const mergeReq = (a: Req, b: Partial<Req>) => {
-  const req = {
-    ...a,
-    ...b,
-    params: { ...a.params, ...b.params },
-    headers: { ...a.headers, ...b.headers },
+const mergeReq = (req: Partial<Req>, baseReq: Req) => {
+  const mergedReq = {
+    ...baseReq,
+    ...req,
+    url: mergeUrl(baseReq.url, req.url ?? ""),
+    params: Object.assign({}, baseReq.params, req.params),
+    headers: Object.assign({}, baseReq.headers, req.headers),
+    reqHooks: baseReq.reqHooks.concat(req.reqHooks ?? []),
+    respHooks: baseReq.respHooks.concat(req.respHooks ?? []),
   };
-  return req;
+  return mergedReq;
 };
 
 /**
@@ -193,7 +214,7 @@ const goget: Goget = {
    * @returns Response descriptor.
    */
   async request<T>(this: Goget, url: string, req: Partial<Req> = {}) {
-    const mergedReq = mergeReq(this.defaultReq, { url, ...req });
+    const mergedReq = mergeReq({ url, ...req }, this.defaultReq);
     const finalReq = await applyHooks(mergedReq, mergedReq.reqHooks);
     return await createResp<T>(
       await fetch(await createRequest(finalReq)),
@@ -210,7 +231,7 @@ const goget: Goget = {
   extend(this: Goget, defaultReq: Req) {
     return {
       ...this,
-      defaultReq: mergeReq(this.defaultReq, defaultReq),
+      defaultReq: mergeReq(defaultReq, this.defaultReq),
     };
   },
 };
