@@ -2,14 +2,15 @@ import fetch, { enableFetchMocks } from "jest-fetch-mock";
 
 enableFetchMocks();
 
-import { default as goget } from ".";
+import goget from ".";
 
 describe("goget", () => {
   beforeEach(() => {
     fetch.resetMocks();
   });
 
-  test("request", async () => {
+  // @todo Split into smaller test cases.
+  test("complete request and response", async () => {
     const example = {
       resp: {
         status: 201,
@@ -20,9 +21,9 @@ describe("goget", () => {
         },
       },
       req: {
-        url: "http://localhost",
-        method: "post" as const,
-        params: { test: 1 },
+        url: "http://{hostname}",
+        method: "POST",
+        params: { hostname: "localhost", test: 1 },
         data: { title: "Hello, world" },
         headers: {
           ["x-api-key"]: "abc123",

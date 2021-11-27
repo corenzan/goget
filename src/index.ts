@@ -1,58 +1,28 @@
-/**
- * HTTP methods.
- */
-export type HttpMethod =
-  | "head"
-  | "options"
-  | "get"
-  | "post"
-  | "patch"
-  | "put"
-  | "delete";
+//! Goget v%d
+//! MIT © 2021 Arthur Corenzan
+//! https://github.com/corenzan/goget
 
 /**
- * Hook for T.
+ * Hook function type.
  */
 export type Hook<T> = (src: T) => Promise<T>;
 
 /**
- * Parameter encoder.
+ * Apply given hooks to source object and produce the promise of a final object.
+ * @param src Source object.
+ * @param hooks List of hooks.
+ * @returns The promise of final object.
+ */
+const applyHooks = <T>(src: T, hooks: Hook<T>[]) => {
+  return hooks.reduce(async (next, hook) => {
+    return await hook(await next);
+  }, Promise.resolve(src));
+};
+
+/**
+ * Parameter encoder function type.
  */
 export type Encoder = (value: unknown) => undefined | string;
-
-/**
- * Request descriptor.
- */
-export type Req = {
-  url: string;
-  method: HttpMethod;
-  params: Record<string, unknown>;
-  data: unknown;
-  headers: Record<string, string>;
-  encode: Encoder;
-  reqHooks: Hook<Req>[];
-  respHooks: Hook<Resp>[];
-};
-
-/**
- * Response descriptor.
- */
-export type Resp<T = unknown> = {
-  req: Req;
-  status: number;
-  url: string;
-  data: T;
-  headers: Record<string, string>;
-};
-
-/**
- * Goget client.
- */
-type Goget = {
-  defaultReq: Req;
-  request: <T>(url: string, req?: Partial<Req>) => Promise<Resp<T>>;
-  extend: (defaultReq: Req) => Goget;
-};
 
 /**
  * Encode parameter value for URL.
@@ -76,29 +46,20 @@ const encode = (value: unknown) => {
 };
 
 /**
- * Apply given hooks to source object and produce the promise of a final object.
- * @param src Source object.
- * @param hooks List of hooks.
- * @returns The promise of final object.
+ * Value mapper function type.
  */
-const applyHooks = <T>(src: T, hooks: Hook<T>[]) => {
-  return hooks.reduce(async (next, hook) => {
-    return await hook(await next);
-  }, Promise.resolve(src));
-};
+type ValueMapper<S, R> = (value: unknown, key: keyof S, object: S) => R;
 
 /**
- * Object mapper function.
- */
-type Mapper<T> = (value: unknown, key: keyof T, object: T) => unknown;
-
-/**
- * Like Arrya.map but for objects.
+ * Like Array.map but for objects.
  * @param object Source object to map.
- * @param map Mapper function.
+ * @param map Value mapper function.
  * @returns New object with values remapped.
  */
-const map = <T extends Record<string, unknown>>(object: T, map: Mapper<T>) => {
+const map = <S extends Record<string, unknown>, R>(
+  object: S,
+  map: ValueMapper<S, R>
+) => {
   return Object.fromEntries(
     Object.keys(object).map((key) => {
       return [key, map(object[key], key, object)];
@@ -107,15 +68,56 @@ const map = <T extends Record<string, unknown>>(object: T, map: Mapper<T>) => {
 };
 
 /**
+ * Interpolate URL with given parameters.
+ * @param url URL to interpolate.
+ * @param params Parameters to be interpolated.
+ * @returns Final string.
+ */
+const interpolateUrl = (
+  url: string,
+  params: Record<string, string | undefined>
+) => {
+  return url.replace(/\{(\w+)\}/g, (_, key) => {
+    return params[key] ?? key;
+  });
+};
+
+/**
  * Build an URL object from request descriptor.
  * @param req Request descriptor.
  * @returns URL instance.
  */
 const createUrl = (req: Req) => {
-  const url = new URL(req.url);
   const params = map(req.params, (value) => req.encode(value));
 
-  return url;
+  const url = interpolateUrl(req.url, params);
+  return new URL(url);
+};
+
+/**
+ * HTTP methods type.
+ */
+export type HttpMethod = `${
+  | "HEAD"
+  | "OPTIONS"
+  | "GET"
+  | "POST"
+  | "PATCH"
+  | "PUT"
+  | "DELETE"}`;
+
+/**
+ * Request descriptor.
+ */
+export type Req = {
+  url: string;
+  method: HttpMethod | string;
+  params: Record<string, unknown>;
+  data: unknown;
+  headers: Record<string, string>;
+  encode: Encoder;
+  reqHooks: Hook<Req>[];
+  respHooks: Hook<Resp>[];
 };
 
 /**
@@ -127,7 +129,7 @@ const createRequest = async (req: Req) => {
   const { headers, data, method } = req;
   const init = {
     method: method.toUpperCase(),
-    headers: {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
   };
   const url = createUrl(req);
@@ -135,21 +137,37 @@ const createRequest = async (req: Req) => {
 };
 
 /**
+ * HTTP status type.
+ */
+export type HttpStatus = number;
+
+/**
+ * Response descriptor.
+ */
+export type Resp<D = unknown> = {
+  req: Req;
+  status: HttpStatus;
+  url: string;
+  data: D;
+  headers: Record<string, string>;
+};
+
+/**
  * Build a response descriptor from given Response instance and request descriptor.
- * @param response Response instance.
+ * @param resp Response instance.
  * @param req Request descriptor.
  * @returns Response descriptor.
  */
-const createResp = async <T>(response: Response, req: Req) => {
-  const { headers, url, status, json } = response;
+const createResp = async <D>(resp: Response, req: Req) => {
+  const { headers, url, status } = resp;
 
   return {
     url,
     req,
     status,
-    data: await json.bind(response)(),
+    data: await resp.json(),
     headers: Object.fromEntries(headers),
-  } as Resp<T>;
+  } as Resp<D>;
 };
 
 /**
@@ -169,15 +187,24 @@ const mergeReq = (a: Req, b: Partial<Req>) => {
 };
 
 /**
+ * Goget instance type.
+ */
+type Goget = {
+  defaultReq: Req;
+  request: <T>(url: string, req?: Partial<Req>) => Promise<Resp<T>>;
+  extend: (defaultReq: Req) => Goget;
+};
+
+/**
  * Main Goget instance.
  */
-const goget: Goget = {
+export const goget: Goget = {
   /**
    * Default request descriptor.
    */
   defaultReq: {
+    method: "GET",
     url: "",
-    method: "get",
     params: {},
     data: undefined,
     headers: {},
